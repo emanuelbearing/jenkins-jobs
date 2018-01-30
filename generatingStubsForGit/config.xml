@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>-1</daysToKeep>
+        <numToKeep>-1</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.29.0">
+      <projectUrl>https://github.com/emanuelbearing/RI-stubs.git/</projectUrl>
+      <displayName></displayName>
+    </com.coravy.hudson.plugins.github.GithubProjectProperty>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.7.0">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>https://AUTH_TOKEN@github.com/emanuelbearing/tmftesting.git</url>
+        <credentialsId>b20ac639-455a-4aa0-acc3-88a05f7484d3</credentialsId>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions/>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers>
+    <com.cloudbees.jenkins.GitHubPushTrigger plugin="github@1.29.0">
+      <spec></spec>
+    </com.cloudbees.jenkins.GitHubPushTrigger>
+  </triggers>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash
+#Download TMF codegen and new Swagger files from Github repositories
+svn export https://github.com/tmforum/tmfswaggergen/trunk/ --force
+git clone https://github.com/emanuelbearing/tmftesting/
+
+#Remove exisiting server stubs
+cd tmftesting/swagger
+rm -R ../bluemix_stubs/
+rm -R ../local_stubs/
+
+#Generate new server stubs for each swagger file
+for swagger in *.json; do
+	#Generate Bluemix stubs
+	bluemix_folder=&quot;../bluemix_stubs/&quot;${swagger%.*}&quot;_bluemix_stub&quot;
+	java -jar ../../trunk/swagger-codegen-cli.jar generate -i $swagger -l nodejs-server -o $bluemix_folder -t ../../trunk/templates
+
+	#Generate a swagger with different host and schema for local development
+	#host = localhost
+	#schema = http
+	local_folder=&quot;../local_stubs/&quot;${swagger%.*}&quot;_local_stub&quot;		
+	sed &apos;/host/c\  &quot;host&quot; : &quot;localhost:8080&quot;,&apos; $swagger &gt; tmp.json
+	sed -i &apos;/&quot;https&quot;/c\  &quot;schemes&quot; : [ &quot;http&quot; ],&apos; tmp.json
+
+	#Generate a stub for local development
+	java -jar ../../trunk/swagger-codegen-cli.jar generate -i tmp.json -l nodejs-server -o $local_folder -t ../../trunk/templates -c ../../trunk/config.json
+	rm tmp.json
+done
+
+#Commit new stubs to Github
+cd ..
+git add ./*
+git commit -am &quot;auto generated stubs (local and Bluemix versions)&quot;
+git push https://AUTH_TOKEN@github.com/emanuelbearing/tmftesting.git HEAD:master
+
+#bx login -a https://api.ng.bluemix.net -u abc@def.com -o tmforum -s apidev
+#bx cf push</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers/>
+  <buildWrappers>
+    <hudson.plugins.ws__cleanup.PreBuildCleanup plugin="ws-cleanup@0.34">
+      <deleteDirs>false</deleteDirs>
+      <cleanupParameter></cleanupParameter>
+      <externalDelete></externalDelete>
+    </hudson.plugins.ws__cleanup.PreBuildCleanup>
+  </buildWrappers>
+</project>
